@@ -100,9 +100,15 @@ export function createViteBuildConfig(opts: CreateViteBuildConfigOptions): vite.
 						return [prefix, cleanChunkName(name), suffix].join('');
 					},
 					assetFileNames(assetInfo) {
+						const name = assetInfo.names?.[0] ?? '';
+						// Use hash-only naming for CSS files so that identical CSS shared across
+						// the prerender and SSR environments produces a single deduplicated file
+						// instead of one per entry point (e.g. `index.X.css` + `_..X.css`).
+						if (name.endsWith('.css')) {
+							return `${settings.config.build.assets}/[hash][extname]`;
+						}
 						// Strip the @_@ extension-masking pattern from asset names, just like chunkFileNames above.
 						// The @_@ pattern is an internal mechanism for virtual module IDs and should not leak into output filenames.
-						const name = assetInfo.names?.[0] ?? '';
 						if (name.includes(ASTRO_PAGE_EXTENSION_POST_PATTERN)) {
 							const [sanitizedName] = name.split(ASTRO_PAGE_EXTENSION_POST_PATTERN);
 							return `${settings.config.build.assets}/${sanitizedName}.[hash][extname]`;

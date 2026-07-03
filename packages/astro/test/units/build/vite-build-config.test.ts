@@ -61,8 +61,21 @@ describe('createViteBuildConfig', () => {
 
 			const output = config.build?.rolldownOptions?.output as Record<string, any>;
 			assert.equal(typeof output.assetFileNames, 'function');
-			const result = output.assetFileNames({ names: ['style.css'] });
+			// Non-CSS assets use [name].[hash][extname]
+			const result = output.assetFileNames({ names: ['image.png'] });
 			assert.match(result, /\[name\]\.\[hash\]\[extname\]/);
+		});
+
+		it('uses hash-only naming for CSS assets to deduplicate across environments', async () => {
+			const settings = await createBasicSettings();
+			const config = buildConfig({ settings });
+
+			const output = config.build?.rolldownOptions?.output as Record<string, any>;
+			const result = output.assetFileNames({ names: ['index.css'] });
+			// CSS files should use [hash][extname] without [name] to ensure identical CSS
+			// from prerender and SSR environments produces the same filename
+			assert.match(result, /\[hash\]\[extname\]$/);
+			assert.doesNotMatch(result, /\[name\]/);
 		});
 
 		it('entryFileNames is always a function (not overridable by user output spread)', async () => {
