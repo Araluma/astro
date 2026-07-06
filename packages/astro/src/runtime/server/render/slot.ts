@@ -105,6 +105,14 @@ export async function renderSlotToString(
 				// hydration, etc.) are position-independent and bubble up separately.
 				if (isScriptInstruction(chunk)) {
 					chunks.push(chunk);
+					// Include the script HTML in the content string so that
+					// toString() produces complete output. The normal rendering
+					// pipeline uses `chunks` (when non-empty) and never reads
+					// `content`, so this doesn't cause double-rendering internally.
+					// It does allow third-party code that consumes the slot result
+					// as a plain string to retain scripts that would otherwise be
+					// silently dropped.
+					content += chunk.content;
 				} else {
 					if (instructions === null) {
 						instructions = [];
@@ -143,19 +151,6 @@ export async function renderSlots(
 							slotInstructions = [];
 						}
 						slotInstructions.push(...output.instructions);
-					}
-					// Framework/`.html` components inline slot content as an opaque
-					// string, so the inline scripts kept in `chunks` would be lost.
-					// Surface them here so they still render (deduplicated at output).
-					if (output.chunks) {
-						for (const part of output.chunks as SlotStringChunk[]) {
-							if (typeof part !== 'string') {
-								if (slotInstructions === null) {
-									slotInstructions = [];
-								}
-								slotInstructions.push(part);
-							}
-						}
 					}
 					children[key] = output;
 				}),
