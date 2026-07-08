@@ -348,6 +348,10 @@ export class ContentLayer {
 				}
 			}),
 		);
+		// Validate content references after all collections are synced
+		const collectionNames = new Set(Object.keys(contentConfig.config.collections));
+		this.#validateReferences(collectionNames);
+
 		await fs.mkdir(this.#settings.config.cacheDir, { recursive: true });
 		await fs.mkdir(this.#settings.dotAstroDir, { recursive: true });
 		const assetImportsFile = new URL(ASSET_IMPORTS_FILE, this.#settings.dotAstroDir);
@@ -358,6 +362,84 @@ export class ContentLayer {
 		logger.info('Synced content');
 		if (this.#settings.config.experimental.contentIntellisense) {
 			await this.regenerateCollectionFileManifest();
+		}
+	}
+
+	/**
+	 * Validates that all content references point to existing entries.
+	 * This runs after all collections are synced so all entries are available.
+	 */
+	#validateReferences(collectionNames: Set<string>) {
+		const errors: Array<string> = [];
+		for (const collectionName of collectionNames) {
+			const entries = this.#store.entries(collectionName);
+			for (const [entryId, entry] of entries) {
+				if (!entry.data) continue;
+				this.#walkAndValidateRefs(
+					entry.data,
+					collectionNames,
+					collectionName,
+					entryId,
+					'',
+					errors,
+				);
+			}
+		}
+		for (const error of errors) {
+			this.#logger.error('content', error);
+		}
+	}
+
+	#walkAndValidateRefs(
+		obj: unknown,
+		collectionNames: Set<string>,
+		sourceCollection: string,
+		sourceEntryId: string,
+		path: string,
+		errors: Array<string>,
+	) {
+		if (!obj || typeof obj !== 'object') return;
+		if (Array.isArray(obj)) {
+			for (let i = 0; i < obj.length; i++) {
+				this.#walkAndValidateRefs(
+					obj[i],
+					collectionNames,
+					sourceCollection,
+					sourceEntryId,
+					path ? `${path}[${i}]` : `[${i}]`,
+					errors,
+				);
+			}
+			return;
+		}
+		const record = obj as Record<string, unknown>;
+		// Check if this object looks like a content reference: { id: string, collection: string }
+		if (
+			typeof record.id === 'string' &&
+			typeof record.collection === 'string' &&
+			collectionNames.has(record.collection)
+		) {
+			const refCollection = record.collection;
+			const refId = record.id;
+			if (this.#store.hasCollection(refCollection) && !this.#store.has(refCollection, refId)) {
+				const fieldPath = path || 'data';
+				errors.push(
+					`Invalid content reference in ${sourceCollection} → ${sourceEntryId}: ` +
+						`**${fieldPath}** references ${refCollection}/${refId}, but that entry does not exist.`,
+				);
+			}
+			return;
+		}
+		// Recurse into nested objects
+		for (const [key, val] of Object.entries(record)) {
+			this.#walkAndValidateRefs(
+				val,
+				collectionNames,
+				sourceCollection,
+				sourceEntryId,
+				path ? `${path}.${key}` : key,
+				errors,
+			);
 		}
 	}
 

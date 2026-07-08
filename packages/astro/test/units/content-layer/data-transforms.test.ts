@@ -571,4 +571,163 @@ describe('Content Layer - Data Transforms', () => {
 		assert.equal(result.data.name, 'Beagle Dog');
 		assert.deepEqual(result.data.favoriteCat, { collection: 'cats', id: '1' });
 	});
+
+	it('logs error for invalid reference ids', async () => {
+		const store = new MutableDataStore();
+		const settings = createMinimalSettings(root);
+		const errors: Array<{ level: string; message: string }> = [];
+		const logger = new AstroLogger({
+			destination: {
+				write(event: any) {
+					errors.push(event);
+					return true;
+				},
+			},
+			level: 'error',
+		});
+
+		// Loader for authors collection — stores entry with id 'john-doe'
+		const authorsLoader = {
+			name: 'authors-loader',
+			load: async (context: any) => {
+				const parsed = await context.parseData({
+					id: 'john-doe',
+					data: { id: 'john-doe', name: 'John Doe' },
+				});
+				await context.store.set({ id: 'john-doe', data: parsed });
+			},
+		};
+
+		// Loader for posts collection — references 'John-Doe' (wrong casing)
+		const postsLoader = {
+			name: 'posts-loader',
+			load: async (context: any) => {
+				const parsed = await context.parseData({
+					id: 'hello-world',
+					data: { id: 'hello-world', title: 'Hello', author: 'John-Doe' },
+				});
+				await context.store.set({ id: 'hello-world', data: parsed });
+			},
+		};
+
+		const collections = {
+			authors: defineCollection({
+				loader: authorsLoader,
+				schema: z.object({
+					id: z.string(),
+					name: z.string(),
+				}),
+			}),
+			posts: defineCollection({
+				loader: postsLoader,
+				schema: z.object({
+					id: z.string(),
+					title: z.string(),
+					author: reference('authors'),
+				}),
+			}),
+		};
+
+		const contentLayer = new ContentLayer({
+			settings,
+			logger,
+			store,
+			contentConfigObserver: createTestConfigObserver(collections),
+		});
+
+		await contentLayer.sync();
+
+		// The reference should be stored as-is (transform still wraps it)
+		const result: any = store.get('posts', 'hello-world');
+		assert.ok(result);
+		assert.deepEqual(result.data.author, { collection: 'authors', id: 'John-Doe' });
+
+		// An error should have been logged about the invalid reference
+		const errorMessages = errors.map((e) => e.message);
+		const errorOutput = errorMessages.join(' ');
+		assert.ok(
+			errorOutput.includes('Invalid content reference'),
+			`Expected error about invalid reference, got: ${errorOutput}`,
+		);
+		assert.ok(
+			errorOutput.includes('John-Doe'),
+			`Expected error to mention 'John-Doe', got: ${errorOutput}`,
+		);
+	});
+
+	it('does not log error for valid reference ids', async () => {
+		const store = new MutableDataStore();
+		const settings = createMinimalSettings(root);
+		const errors: Array<{ level: string; message: string }> = [];
+		const logger = new AstroLogger({
+			destination: {
+				write(event: any) {
+					errors.push(event);
+					return true;
+				},
+			},
+			level: 'error',
+		});
+
+		const authorsLoader = {
+			name: 'authors-loader',
+			load: async (context: any) => {
+				const parsed = await context.parseData({
+					id: 'john-doe',
+					data: { id: 'john-doe', name: 'John Doe' },
+				});
+				await context.store.set({ id: 'john-doe', data: parsed });
+			},
+		};
+
+		const postsLoader = {
+			name: 'posts-loader',
+			load: async (context: any) => {
+				const parsed = await context.parseData({
+					id: 'hello-world',
+					data: { id: 'hello-world', title: 'Hello', author: 'john-doe' },
+				});
+				await context.store.set({ id: 'hello-world', data: parsed });
+			},
+		};
+
+		const collections = {
+			authors: defineCollection({
+				loader: authorsLoader,
+				schema: z.object({
+					id: z.string(),
+					name: z.string(),
+				}),
+			}),
+			posts: defineCollection({
+				loader: postsLoader,
+				schema: z.object({
+					id: z.string(),
+					title: z.string(),
+					author: reference('authors'),
+				}),
+			}),
+		};
+
+		const contentLayer = new ContentLayer({
+			settings,
+			logger,
+			store,
+			contentConfigObserver: createTestConfigObserver(collections),
+		});
+
+		await contentLayer.sync();
+
+		const result: any = store.get('posts', 'hello-world');
+		assert.ok(result);
+		assert.deepEqual(result.data.author, { collection: 'authors', id: 'john-doe' });
+
+		// No error should be logged for valid references
+		const errorMessages = errors.map((e) => e.message);
+		const errorOutput = errorMessages.join(' ');
+		assert.ok(
+			!errorOutput.includes('Invalid content reference'),
+			`Expected no error about invalid reference, got: ${errorOutput}`,
+		);
+	});
 });
