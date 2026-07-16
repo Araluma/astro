@@ -136,14 +136,16 @@ Make sure to use the static attribute syntax (\`${key}={value}\`) instead of the
 	}
 
 	// We cannot add it to htmlBooleanAttributes because it can be: boolean | "auto" | "manual"
+	// These are global HTML attributes valid on any element (including custom elements),
+	// and "true" is not a valid value, so always use bare attribute rendering.
 	if (key === 'popover' && typeof value === 'boolean') {
-		return handleBooleanAttribute(key, value, shouldEscape, tagName);
+		return markHTMLString(value ? ` ${key}` : '');
 	}
 	if (key === 'download' && typeof value === 'boolean') {
-		return handleBooleanAttribute(key, value, shouldEscape, tagName);
+		return markHTMLString(value ? ` ${key}` : '');
 	}
 	if (key === 'hidden' && typeof value === 'boolean') {
-		return handleBooleanAttribute(key, value, shouldEscape, tagName);
+		return markHTMLString(value ? ` ${key}` : '');
 	}
 
 	return markHTMLString(` ${key}="${toAttributeString(value, shouldEscape)}"`);

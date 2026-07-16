@@ -76,4 +76,24 @@ describe('core/render components', () => {
 		assert.ok(!hasBooleanSelected, 'no boolean selected');
 		assert.ok(!hasBooleanAutoplay, 'no boolean autoplay');
 	});
+
+	it('should render popover as bare attribute on custom elements', async () => {
+		const res = await fixture.fetch('/custom-elements');
+		const html = await res.text();
+		const $ = cheerio.load(html);
+
+		// Bare popover on custom element should NOT become popover="true"
+		assert.ok(!html.includes('popover="true"'), 'popover should not be rendered as popover="true"');
+
+		// Bare popover should be rendered as a bare attribute
+		const customPopover = $('#custom-popover');
+		assert.equal(customPopover.attr('popover'), '', 'bare popover should render as empty attribute');
+
+		// Explicit popover="auto" should be preserved
+		const customPopoverAuto = $('#custom-popover-auto');
+		assert.equal(customPopoverAuto.attr('popover'), 'auto', 'popover="auto" should be preserved');
+
+		// Hidden on custom element should render as bare attribute, not hidden="true"
+		assert.ok(!html.includes('hidden="true"'), 'hidden should not be rendered as hidden="true"');
+	});
 });
