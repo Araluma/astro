@@ -633,7 +633,7 @@ describe('Config Validation', () => {
 			// Pre-6.0 `@astrojs/mdx` reads `config.markdown.rehypePlugins` directly to feed
 			// its own MDX-side processor, so the legacy key must survive validation.
 			assert.deepEqual(result.markdown.rehypePlugins, [plugin]);
-			const { processor } = result.markdown;
+			const processor = result.markdown.processor!;
 			assert.ok(isUnifiedProcessor(processor));
 			assert.deepEqual(processor.options.rehypePlugins, [plugin]);
 		});
@@ -647,7 +647,7 @@ describe('Config Validation', () => {
 			// The second pass runs after `astro:config:setup`; without the WeakMap guard
 			// it would re-fold the same plugins and double them up.
 			const again = await validateConfigRefined(validated);
-			const { processor } = again.markdown;
+			const processor = again.markdown.processor!;
 			assert.ok(isUnifiedProcessor(processor));
 			assert.deepEqual(processor.options.remarkPlugins, [remark]);
 			assert.deepEqual(processor.options.rehypePlugins, [rehype]);
@@ -663,7 +663,7 @@ describe('Config Validation', () => {
 			// (Starlight-style `updateConfig({ markdown: { rehypePlugins: [...] } })`).
 			validated.markdown.rehypePlugins.push(integrationPlugin);
 			const refined = await validateConfigRefined(validated);
-			const { processor } = refined.markdown;
+			const processor = refined.markdown.processor!;
 			assert.ok(isUnifiedProcessor(processor));
 			assert.deepEqual(processor.options.rehypePlugins, [userPlugin, integrationPlugin]);
 		});
@@ -704,6 +704,17 @@ describe('Config Validation', () => {
 				JSON.stringify(configError.issues).includes('maxAge'),
 				'Error should reference maxAge',
 			);
+		});
+	});
+
+	describe('markdown processor default', () => {
+		it('does not set a default processor in validateConfig (deferred to config resolution)', async () => {
+			// The satteri default processor is applied during config resolution
+			// (in config.ts), not in validateConfig. This ensures the satteri
+			// package is not pulled into the prerender bundle when the Container
+			// API is used with adapters that set non-Node resolve conditions.
+			const result = await validateConfig({});
+			assert.equal(result.markdown.processor, undefined);
 		});
 	});
 });

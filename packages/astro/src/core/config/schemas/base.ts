@@ -5,11 +5,7 @@ import type {
 	Smartypants as _Smartypants,
 	ShikiConfig,
 } from '@astrojs/internal-helpers/markdown';
-import {
-	markdownConfigDefaults,
-	syntaxHighlightDefaults,
-} from '@astrojs/internal-helpers/markdown';
-import { satteri } from '@astrojs/markdown-satteri';
+import { syntaxHighlightDefaults } from '@astrojs/internal-helpers/markdown';
 import type { MarkdownProcessor } from '../../../markdown/index.js';
 import type { OutgoingHttpHeaders } from 'node:http';
 import { type BuiltinTheme, bundledThemes } from 'shiki';
@@ -17,7 +13,7 @@ import * as z from 'zod/v4';
 import { FontFamilySchema } from '../../../assets/fonts/config.js';
 import { SvgOptimizerSchema } from '../../../assets/svg/config.js';
 import { EnvSchema } from '../../../env/schema.js';
-import type { AstroUserConfig, ViteUserConfig } from '../../../types/public/config.js';
+import type { ViteUserConfig } from '../../../types/public/config.js';
 import { CacheSchema, RouteRulesSchema } from '../../cache/config.js';
 import {
 	allowedDirectivesSchema,
@@ -63,69 +59,8 @@ export type RemarkRehype = ComplexifyWithOmit<_RemarkRehype>;
 /** @lintignore */
 export type Smartypants = ComplexifyWithOmit<_Smartypants>;
 
-export const ASTRO_CONFIG_DEFAULTS = {
-	root: '.',
-	srcDir: './src',
-	publicDir: './public',
-	outDir: './dist',
-	cacheDir: './node_modules/.astro',
-	base: '/',
-	trailingSlash: 'ignore',
-	build: {
-		format: 'directory',
-		client: './client/',
-		server: './server/',
-		assets: '_astro',
-		serverEntry: 'entry.mjs',
-		redirects: true,
-		inlineStylesheets: 'auto',
-		concurrency: 1,
-	},
-	image: {
-		endpoint: { entrypoint: undefined, route: '/_image' },
-		service: { entrypoint: 'astro/assets/services/sharp', config: {} },
-		dangerouslyProcessSVG: false,
-		responsiveStyles: false,
-	},
-	devToolbar: {
-		enabled: true,
-	},
-	compressHTML: 'jsx',
-	server: {
-		host: false,
-		port: 4321,
-		open: false,
-		allowedHosts: [],
-	},
-	integrations: [],
-	markdown: markdownConfigDefaults,
-	vite: {},
-	legacy: {
-		collectionsBackwardsCompat: false,
-	},
-	redirects: {},
-	security: {
-		checkOrigin: true,
-		allowedDomains: [],
-		csp: false,
-		actionBodySizeLimit: 1024 * 1024,
-		serverIslandBodySizeLimit: 1024 * 1024,
-	},
-	env: {
-		schema: {},
-		validateSecrets: false,
-	},
-	prerenderConflictBehavior: 'warn',
-	fetchFile: 'fetch',
-	experimental: {
-		clientPrerender: false,
-		contentIntellisense: false,
-		chromeDevtoolsWorkspace: false,
-		collectionStorage: 'single-file',
-	},
-} satisfies AstroUserConfig & {
-	server: { open: boolean };
-};
+import { ASTRO_CONFIG_DEFAULTS } from './defaults.js';
+export { ASTRO_CONFIG_DEFAULTS } from './defaults.js';
 
 const highlighterTypesSchema = z
 	.union([z.literal('shiki'), z.literal('prism')])
@@ -423,8 +358,8 @@ export const AstroConfigSchema = z.object({
 				.custom<RemarkRehype>((data) => data instanceof Object && !Array.isArray(data))
 				.default(ASTRO_CONFIG_DEFAULTS.markdown.remarkRehype),
 			// Deprecated: left undefined unless the user explicitly sets them, so the
-			// deprecation warning only fires when actually used. The active processor
-			// (`satteri()`) supplies the real default (`gfm`/smart punctuation on) when
+			// deprecation warning only fires when actually used. The default processor
+			// (satteri) supplies the real default (`gfm`/smart punctuation on) when
 			// these are absent.
 			gfm: z.boolean().optional(),
 			smartypants: z
@@ -451,10 +386,14 @@ export const AstroConfigSchema = z.object({
 						)
 						.optional(),
 				})
-				// A factory (not a shared value) so every config gets its own processor —
-				// integrations extend the pipeline by mutating `processor.options`, which
-				// would otherwise leak across configs built in the same process.
-				.default(() => satteri()),
+				// The processor default (satteri) is applied in config resolution
+				// (config.ts) via dynamic import, not here. Keeping it out of the
+				// schema avoids a static import of `@astrojs/markdown-satteri` which
+				// would pull the `satteri` package into the prerender bundle. When the
+				// prerender environment uses non-Node resolve conditions (e.g. the
+				// Cloudflare adapter's workerd `browser` condition), satteri's WASM
+				// entry is resolved instead, whose dependencies are not installed.
+				.optional(),
 		})
 		.prefault({}),
 	vite: z

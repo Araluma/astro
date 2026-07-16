@@ -162,5 +162,16 @@ export async function resolveConfig(
 		throw e;
 	}
 
+	// Apply the default markdown processor via dynamic import. This is done
+	// here rather than in the Zod schema to keep the `satteri` package out of
+	// static import chains — a static import in the schema module causes build
+	// failures when the prerender environment uses non-Node resolve conditions
+	// (e.g. the Cloudflare adapter's workerd `browser` condition resolves
+	// satteri's WASM entry whose dependencies are not installed).
+	if (!astroConfig.markdown.processor) {
+		const { satteri } = await import('@astrojs/markdown-satteri');
+		astroConfig.markdown.processor = satteri();
+	}
+
 	return { userConfig: mergedConfig, astroConfig };
 }
